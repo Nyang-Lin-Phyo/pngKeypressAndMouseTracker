@@ -419,7 +419,7 @@ document.addEventListener('mousemove', (e) => {
     const maxInput = Math.max(window.innerWidth, window.innerHeight) / 2;
     const normX = Math.max(-1, Math.min(1, rawDX / maxInput));
     const normY = Math.max(-1, Math.min(1, rawDY / maxInput));
-    mouseDisplay.style.transform = `translate(${normX * MOUSE_RANGE}px, ${normY * MOUSE_RANGE}px)`;
+    mouseDisplay.style.transform = `translate(${-normX * MOUSE_RANGE}px, ${-normY * MOUSE_RANGE}px)`;
   }
 });
 
