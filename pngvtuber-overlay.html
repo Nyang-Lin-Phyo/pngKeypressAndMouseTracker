@@ -30,15 +30,30 @@
 
   #overlay.dragging { cursor: grabbing; }
 
-  /* PNG display */
-  #png-display {
+  /* PNG stack — base/keypress + mouse hand layered on top */
+  #png-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  #png-display,
+  #mouse-display {
+    position: absolute;
+    top: 0; left: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;
     display: block;
     pointer-events: none;
     image-rendering: pixelated;
-    transition: opacity 0.04s ease;
+  }
+
+  /* mouse hand sits on top, offset by JS */
+  #mouse-display {
+    z-index: 2;
+    /* default: centered (no offset) */
+    transform: translate(0px, 0px);
   }
 
   /* Resize handle — bottom-right corner */
@@ -220,7 +235,10 @@
 
 <!-- The actual PNG overlay -->
 <div id="overlay">
-  <img id="png-display" src="" alt="">
+  <div id="png-stack">
+    <img id="png-display" src="" alt="">
+    <img id="mouse-display" src="" alt="" style="display:none;">
+  </div>
   <div id="resize-handle"></div>
 </div>
 
@@ -236,14 +254,19 @@ const KEY_MAP = {
 
 const images = {}; // name → object URL
 let baseImg = null;
+let mouseImg = null;        // rightHandMouse URL
 let activeKey = null;
 let releaseTimer = null;
 
 const display = document.getElementById('png-display');
+const mouseDisplay = document.getElementById('mouse-display');
 const panel = document.getElementById('control-panel');
 const status = document.getElementById('status');
 const keyGrid = document.getElementById('key-grid');
 const overlay = document.getElementById('overlay');
+
+// ── Mouse tracking ──
+const MOUSE_RANGE = 30; // ±px the hand can travel in any direction
 
 // ── Build key grid ──
 const chips = {};
@@ -274,6 +297,13 @@ document.getElementById('file-input').addEventListener('change', (e) => {
     if (nameNoExt === 'base') {
       baseImg = url;
       images['base'] = url;
+      loaded++;
+    }
+
+    if (nameNoExt === 'righthandmouse') {
+      mouseImg = url;
+      mouseDisplay.src = url;
+      mouseDisplay.style.display = 'block';
       loaded++;
     }
 
@@ -378,6 +408,18 @@ document.addEventListener('mousemove', (e) => {
     const newH = Math.max(60, e.clientY - resizeStartY + resizeStartH);
     overlay.style.width  = newW + 'px';
     overlay.style.height = newH + 'px';
+  }
+  // Mouse hand tracking (runs even while dragging/resizing for simplicity)
+  if (mouseImg) {
+    const rect = overlay.getBoundingClientRect();
+    const centerX = rect.left + rect.width  / 2;
+    const centerY = rect.top  + rect.height / 2;
+    const rawDX = e.clientX - centerX;
+    const rawDY = e.clientY - centerY;
+    const maxInput = Math.max(window.innerWidth, window.innerHeight) / 2;
+    const normX = Math.max(-1, Math.min(1, rawDX / maxInput));
+    const normY = Math.max(-1, Math.min(1, rawDY / maxInput));
+    mouseDisplay.style.transform = `translate(${normX * MOUSE_RANGE}px, ${normY * MOUSE_RANGE}px)`;
   }
 });
 
