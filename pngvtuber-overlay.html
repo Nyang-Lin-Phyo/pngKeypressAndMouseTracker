@@ -1,536 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PNGvtuber Overlay</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PNGvtuber Overlay</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    body {
-      background: transparent;
-      overflow: hidden;
-      width: 100vw;
-      height: 100vh;
-      font-family: 'Segoe UI', sans-serif;
-    }
+  body {
+    background: transparent;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+  }
 
-    #overlay {
-      position: fixed;
-      width: 320px;
-      height: 320px;
-      user-select: none;
-      z-index: 9999;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-      /* no drag, no click capture */
-    }
+  #overlay {
+    position: fixed;
+    width: 320px;
+    height: 320px;
+    user-select: none;
+    z-index: 9999;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
 
-    #png-stack {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
+  #png-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
 
-    #png-display,
-    #mouse-display {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-      pointer-events: none;
-      image-rendering: pixelated;
-    }
+  #png-display,
+  #mouse-display {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    pointer-events: none;
+    image-rendering: pixelated;
+  }
 
-    #mouse-display {
-      z-index: 2;
-      transform: translate(0px, 0px);
-    }
+  #mouse-display {
+    z-index: 2;
+    transform: translate(0px, 0px);
+  }
 
-    /* ── Control Panel ── */
-    #control-panel {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      background: rgba(10, 10, 15, 0.92);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 10px;
-      padding: 14px 16px;
-      color: #e8e8f0;
-      font-size: 12px;
-      min-width: 240px;
-      backdrop-filter: blur(12px);
-      z-index: 99999;
-      transition: opacity 0.2s, transform 0.2s;
-    }
-
-    #control-panel.hidden {
-      opacity: 0;
-      pointer-events: none;
-      transform: translateY(-6px);
-    }
-
-    #control-panel h2 {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.05em;
-      color: #fff;
-      margin-bottom: 10px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    #control-panel h2 span.dot {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: #6ee86e;
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 1;
-      }
-
-      50% {
-        opacity: 0.4;
-      }
-    }
-
-    .folder-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 10px;
-    }
-
-    .folder-row label {
-      color: #aaa;
-      font-size: 11px;
-      white-space: nowrap;
-    }
-
-    #folder-btn {
-      flex: 1;
-      background: rgba(255, 255, 255, 0.07);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 5px;
-      color: #ddd;
-      font-size: 11px;
-      padding: 4px 8px;
-      cursor: pointer;
-      text-align: left;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      transition: background 0.15s;
-    }
-
-    #folder-btn:hover {
-      background: rgba(255, 255, 255, 0.13);
-    }
-
-    #file-input {
-      display: none;
-    }
-
-    .key-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 4px;
-      margin-bottom: 10px;
-    }
-
-    .key-chip {
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      text-align: center;
-      padding: 3px 2px;
-      font-size: 10px;
-      color: #888;
-      transition: all 0.08s;
-      font-family: monospace;
-    }
-
-    .key-chip.loaded {
-      color: #bbb;
-      border-color: rgba(110, 232, 110, 0.3);
-      background: rgba(110, 232, 110, 0.07);
-    }
-
-    .key-chip.active {
-      color: #6ee86e;
-      border-color: #6ee86e;
-      background: rgba(110, 232, 110, 0.18);
-      transform: scale(0.93);
-    }
-
-    /* Mouse indicator row */
-    .mouse-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
-      padding: 5px 8px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 5px;
-    }
-
-    .mouse-row .mouse-icon {
-      font-size: 13px;
-    }
-
-    .mouse-row .mouse-label {
-      flex: 1;
-      font-size: 10px;
-      font-family: monospace;
-      color: #666;
-    }
-
-    .mouse-row .mouse-badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #555;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
-
-    .mouse-row.loaded .mouse-label {
-      color: #bbb;
-    }
-
-    .mouse-row.loaded .mouse-badge {
-      background: rgba(110, 232, 110, 0.07);
-      color: #6ee86e;
-      border-color: rgba(110, 232, 110, 0.3);
-    }
-
-    .hint {
-      color: #555;
-      font-size: 10px;
-      line-height: 1.5;
-      border-top: 1px solid rgba(255, 255, 255, 0.07);
-      padding-top: 8px;
-      margin-top: 2px;
-    }
-
-    .hint kbd {
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 3px;
-      padding: 1px 4px;
-      font-size: 10px;
-      font-family: monospace;
-      color: #ccc;
-    }
-
-    #status {
-      color: #666;
-      font-size: 10px;
-      margin-bottom: 8px;
-      font-style: italic;
-    }
-
-    #status.ok {
-      color: #6ee86e;
-      font-style: normal;
-    }
-
-    #status.warn {
-      color: #e8b86e;
-      font-style: normal;
-    }
-  </style>
+  /* ── Status dot (top-right corner, tiny) ── */
+  #ws-dot {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #e85a5a;
+    z-index: 999999;
+    transition: background 0.3s;
+    title: "WebSocket disconnected";
+  }
+  #ws-dot.connected { background: #6ee86e; }
+</style>
 </head>
-
 <body>
 
-  <div id="control-panel">
-    <h2><span class="dot"></span> PNGvtuber Overlay</h2>
-    <div id="status">No images loaded — select your pics folder</div>
+<!-- <div id="ws-dot" title="WebSocket: disconnected"></div> -->
 
-    <div class="folder-row">
-      <label>Pics folder:</label>
-      <button id="folder-btn" onclick="document.getElementById('file-input').click()">📁 Choose folder…</button>
-      <input type="file" id="file-input" multiple accept="image/png,image/gif,image/webp">
-    </div>
-
-    <div class="key-grid" id="key-grid"></div>
-
-    <div class="mouse-row" id="mouse-row">
-      <span class="mouse-icon">🖱️</span>
-      <span class="mouse-label">rightHandMouse.png</span>
-      <span class="mouse-badge" id="mouse-badge">not loaded</span>
-    </div>
-
-    <div class="hint">
-      <kbd>C</kbd> hide/show this panel
-    </div>
+<div id="overlay">
+  <div id="png-stack">
+    <img id="png-display"   src="" alt="">
+    <img id="mouse-display" src="" alt="" style="display:none;">
   </div>
+</div>
 
-  <div id="overlay">
-    <div id="png-stack">
-      <img id="png-display" src="" alt="">
-      <img id="mouse-display" src="" alt="" style="display:none;">
-    </div>
-  </div>
+<script>
+// ── Config ────────────────────────────────────────────────────────────────
+const WS_URL    = 'ws://localhost:8765';
+const PNG_DIR   = './PNGs/';
+const MOUSE_RANGE = 20;    // ±px the hand overlay can travel
+const RADIUS_X    = 1100;  // increase if hand hits left/right wall too early
+const RADIUS_Y    = 800;   // increase if hand hits top/bottom wall too early
 
-  <script>
-    const KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', ' '];
+// ── Set these to where your mousepad center is on your PHYSICAL screen ────
+// How to find them: move your mouse to where the hand should be centered,
+// then check the coords printed by server.py — paste those values here.
+const MOUSE_CENTER_X = 960;   // absolute screen X of mousepad center
+const MOUSE_CENTER_Y = 540;   // absolute screen Y of mousepad center
 
-    const KEY_MAP = {
-      '1': 'press1',
-      '2': 'press2',
-      '3': 'press3',
-      '4': 'press4',
-      'q': 'pressQ',
-      'w': 'pressW',
-      'e': 'pressE',
-      'r': 'pressR',
-      'a': 'pressA',
-      's': 'pressS',
-      'd': 'pressD',
-      'f': 'pressF',
-      ' ': 'pressSpace'
-    };
+const KEY_MAP = {
+  '1': 'press1', '2': 'press2', '3': 'press3', '4': 'press4',
+  'q': 'pressQ', 'w': 'pressW', 'e': 'pressE', 'r': 'pressR',
+  'a': 'pressA', 's': 'pressS', 'd': 'pressD', 'f': 'pressF',
+  'space': 'pressSpace',
+};
 
-    const REQUIRED_FILES = [
-      'base.png',
-      'rightHandMouse.png',
-      'press1.png',
-      'press2.png',
-      'press3.png',
-      'press4.png',
-      'pressQ.png',
-      'pressW.png',
-      'pressE.png',
-      'pressR.png',
-      'pressA.png',
-      'pressS.png',
-      'pressD.png',
-      'pressF.png',
-      'pressSpace.png'
-    ];
+// ── Elements ──────────────────────────────────────────────────────────────
+const display      = document.getElementById('png-display');
+const mouseDisplay = document.getElementById('mouse-display');
+// const wsDot        = document.getElementById('ws-dot');
+const overlay      = document.getElementById('overlay');
 
-    const PNG_DIR = './PNGs/';
+// ── Preload images ────────────────────────────────────────────────────────
+const images = {};   // key → img src path
+let baseImg  = null;
+let mouseImg = null;
 
-    const MOUSE_RANGE = 30;
-    const RADIUS = 400;
+function preload(src) {
+  return new Promise(resolve => {
+    const i = new Image();
+    i.onload  = () => resolve(true);
+    i.onerror = () => resolve(false);
+    i.src = src;
+  });
+}
 
-    const images = {};
+async function loadAll() {
+  const basePath   = PNG_DIR + 'base.png';
+  const mousePath  = PNG_DIR + 'rightHandMouse.png';
 
-    let baseImg = null;
-    let mouseImg = null;
-    let activeKey = null;
+  if (await preload(basePath)) {
+    baseImg      = basePath;
+    display.src  = basePath;
+  }
 
-    const display = document.getElementById('png-display');
-    const mouseDisplay = document.getElementById('mouse-display');
-    const panel = document.getElementById('control-panel');
-    const status = document.getElementById('status');
-    const keyGrid = document.getElementById('key-grid');
-    const overlay = document.getElementById('overlay');
+  if (await preload(mousePath)) {
+    mouseImg              = mousePath;
+    mouseDisplay.src      = mousePath;
+    mouseDisplay.style.display = 'block';
+  }
 
-    panel.innerHTML = `
-<h2><span class="dot"></span> PNGvtuber Overlay</h2>
-<div id="status">Loading PNGs...</div>
-`;
+  for (const [key, name] of Object.entries(KEY_MAP)) {
+    const path = PNG_DIR + name + '.png';
+    if (await preload(path)) images[key] = path;
+  }
+}
 
-    const chips = {};
+loadAll();
 
-    KEYS.forEach(k => {
-      const el = document.createElement('div');
-      el.className = 'key-chip';
-      el.textContent = k === ' ' ? 'SPC' : k.toUpperCase();
-      chips[k] = el;
-    });
+// ── Apply state from server ───────────────────────────────────────────────
+function applyState({ held_keys, mouse_x, mouse_y }) {
+  // Key: use last (most recently pressed) held key
+  const activeKey = held_keys.length > 0 ? held_keys[held_keys.length - 1] : null;
 
-    function loadImage(src) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
+  if (activeKey && images[activeKey]) {
+    display.src = images[activeKey];
+  } else if (baseImg) {
+    display.src = baseImg;
+  }
 
-        img.onload = () => resolve(src);
-        img.onerror = () => reject(src);
+  // Mouse hand offset — relative to fixed screen anchor point
+  if (mouseImg) {
+    const normX = Math.max(-1, Math.min(1, (mouse_x - MOUSE_CENTER_X) / RADIUS_X));
+    const normY = Math.max(-1, Math.min(1, (mouse_y - MOUSE_CENTER_Y) / RADIUS_Y));
+    mouseDisplay.style.transform =
+      `translate(${-normX * MOUSE_RANGE}px, ${-normY * MOUSE_RANGE}px)`;
+  }
+}
 
-        img.src = src;
-      });
-    }
+// ── WebSocket with auto-reconnect ─────────────────────────────────────────
+let ws = null;
 
-    async function initializeImages() {
-      const missing = [];
+function connect() {
+  ws = new WebSocket(WS_URL);
 
-      for (const filename of REQUIRED_FILES) {
-        const path = PNG_DIR + filename;
+  ws.addEventListener('open', () => {
+    wsDot.classList.add('connected');
+    wsDot.title = 'WebSocket: connected';
+  });
 
-        try {
-          await loadImage(path);
+  ws.addEventListener('message', (e) => {
+    try {
+      applyState(JSON.parse(e.data));
+    } catch (_) {}
+  });
 
-          const lower = filename.toLowerCase();
+  ws.addEventListener('close', () => {
+    wsDot.classList.remove('connected');
+    wsDot.title = 'WebSocket: disconnected — retrying…';
+    // Auto-reconnect after 2s
+    setTimeout(connect, 2000);
+  });
 
-          if (lower === 'base.png') {
-            baseImg = path;
-          }
-          else if (lower === 'righthandmouse.png') {
-            mouseImg = path;
-          }
-          else {
-            for (const [key, mapped] of Object.entries(KEY_MAP)) {
-              if (filename.toLowerCase() === `${mapped.toLowerCase()}.png`) {
-                images[key] = path;
-              }
-            }
-          }
-        }
-        catch {
-          missing.push(filename);
-        }
-      }
+  ws.addEventListener('error', () => {
+    ws.close();
+  });
+}
 
-      if (missing.length > 0) {
-        panel.classList.remove('hidden');
-
-        panel.innerHTML = `
-      <h2><span class="dot"></span> PNG Loading Error</h2>
-
-      <div style="
-        color:#ff8a8a;
-        margin-top:8px;
-        margin-bottom:8px;
-        font-size:12px;
-      ">
-        Missing files:
-      </div>
-
-      <div style="
-        font-family:monospace;
-        font-size:11px;
-        color:#ddd;
-        line-height:1.6;
-        white-space:pre-wrap;
-      ">
-${missing.join('\n')}
-      </div>
-
-      <div class="hint" style="margin-top:10px">
-        Expected folder:
-        <br>
-        PNGs/
-      </div>
-    `;
-
-        return;
-      }
-
-      display.src = baseImg;
-
-      if (mouseImg) {
-        mouseDisplay.src = mouseImg;
-        mouseDisplay.style.display = 'block';
-      }
-
-      panel.style.display = 'none';
-    }
-
-    initializeImages();
-
-    function setKey(k) {
-      if (!baseImg) return;
-
-      activeKey = k;
-
-      if (k !== null && images[k]) {
-        display.src = images[k];
-      }
-      else {
-        display.src = baseImg;
-      }
-    }
-
-    const heldKeys = new Set();
-
-    document.addEventListener('keydown', (e) => {
-      if (e.repeat) return;
-
-      const k = e.key === ' '
-        ? ' '
-        : e.key.toLowerCase();
-
-      if (!KEYS.includes(k)) return;
-
-      e.preventDefault();
-
-      heldKeys.add(k);
-      setKey(k);
-    });
-
-    document.addEventListener('keyup', (e) => {
-      const k = e.key === ' '
-        ? ' '
-        : e.key.toLowerCase();
-
-      heldKeys.delete(k);
-
-      if (heldKeys.size > 0) {
-        setKey([...heldKeys].at(-1));
-      } else {
-        setKey(null);
-      }
-    });
-
-    let overlayCenter = null;
-
-    function getOverlayCenter() {
-      if (!overlayCenter) {
-        const rect = overlay.getBoundingClientRect();
-
-        overlayCenter = {
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2
-        };
-      }
-
-      return overlayCenter;
-    }
-
-    window.addEventListener('resize', () => {
-      overlayCenter = null;
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!mouseImg) return;
-
-      const c = getOverlayCenter();
-
-      const normX = Math.max(
-        -1,
-        Math.min(1, (e.clientX - c.x) / RADIUS)
-      );
-
-      const normY = Math.max(
-        -1,
-        Math.min(1, (e.clientY - c.y) / RADIUS)
-      );
-
-      mouseDisplay.style.transform =
-        `translate(${-normX * MOUSE_RANGE}px, ${-normY * MOUSE_RANGE}px)`;
-    });
-  </script>
+connect();
+</script>
 </body>
-
 </html>
