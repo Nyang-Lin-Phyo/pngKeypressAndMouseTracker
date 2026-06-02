@@ -15,22 +15,18 @@
     font-family: 'Segoe UI', sans-serif;
   }
 
-  /* ── Overlay container: draggable + resizable ── */
   #overlay {
     position: fixed;
     width: 320px;
     height: 320px;
-    cursor: grab;
     user-select: none;
     z-index: 9999;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    pointer-events: none; /* no drag, no click capture */
   }
 
-  #overlay.dragging { cursor: grabbing; }
-
-  /* PNG stack — base/keypress + mouse hand layered on top */
   #png-stack {
     position: relative;
     width: 100%;
@@ -49,40 +45,12 @@
     image-rendering: pixelated;
   }
 
-  /* mouse hand sits on top, offset by JS */
   #mouse-display {
     z-index: 2;
-    /* default: centered (no offset) */
     transform: translate(0px, 0px);
   }
 
-  /* Resize handle — bottom-right corner */
-  #resize-handle {
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    width: 18px;
-    height: 18px;
-    cursor: se-resize;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 10;
-  }
-
-  #overlay:hover #resize-handle { opacity: 1; }
-
-  #resize-handle::before {
-    content: '';
-    position: absolute;
-    bottom: 3px;
-    right: 3px;
-    width: 10px;
-    height: 10px;
-    border-right: 2px solid rgba(255,255,255,0.7);
-    border-bottom: 2px solid rgba(255,255,255,0.7);
-  }
-
-  /* ── Control Panel (toggle with C) ── */
+  /* ── Control Panel ── */
   #control-panel {
     position: fixed;
     top: 12px;
@@ -156,7 +124,6 @@
   }
 
   #folder-btn:hover { background: rgba(255,255,255,0.13); }
-
   #file-input { display: none; }
 
   .key-grid {
@@ -181,6 +148,43 @@
   .key-chip.loaded { color: #bbb; border-color: rgba(110,232,110,0.3); background: rgba(110,232,110,0.07); }
   .key-chip.active { color: #6ee86e; border-color: #6ee86e; background: rgba(110,232,110,0.18); transform: scale(0.93); }
 
+  /* Mouse indicator row */
+  .mouse-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 5px 8px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 5px;
+  }
+
+  .mouse-row .mouse-icon { font-size: 13px; }
+
+  .mouse-row .mouse-label {
+    flex: 1;
+    font-size: 10px;
+    font-family: monospace;
+    color: #666;
+  }
+
+  .mouse-row .mouse-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.06);
+    color: #555;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .mouse-row.loaded .mouse-label { color: #bbb; }
+  .mouse-row.loaded .mouse-badge {
+    background: rgba(110,232,110,0.07);
+    color: #6ee86e;
+    border-color: rgba(110,232,110,0.3);
+  }
+
   .hint {
     color: #555;
     font-size: 10px;
@@ -199,7 +203,6 @@
     color: #ccc;
   }
 
-  /* Status bar */
   #status {
     color: #666;
     font-size: 10px;
@@ -213,7 +216,6 @@
 </head>
 <body>
 
-<!-- Control Panel -->
 <div id="control-panel">
   <h2><span class="dot"></span> PNGvtuber Overlay</h2>
   <div id="status">No images loaded — select your pics folder</div>
@@ -224,22 +226,24 @@
     <input type="file" id="file-input" multiple accept="image/png,image/gif,image/webp">
   </div>
 
-  <div class="key-grid" id="key-grid">
-    <!-- filled by JS -->
+  <div class="key-grid" id="key-grid"></div>
+
+  <div class="mouse-row" id="mouse-row">
+    <span class="mouse-icon">🖱️</span>
+    <span class="mouse-label">rightHandMouse.png</span>
+    <span class="mouse-badge" id="mouse-badge">not loaded</span>
   </div>
 
   <div class="hint">
-    <kbd>C</kbd> hide/show this panel &nbsp;·&nbsp; Drag PNG to move &nbsp;·&nbsp; ↘ corner to resize
+    <kbd>C</kbd> hide/show this panel
   </div>
 </div>
 
-<!-- The actual PNG overlay -->
 <div id="overlay">
   <div id="png-stack">
     <img id="png-display" src="" alt="">
     <img id="mouse-display" src="" alt="" style="display:none;">
   </div>
-  <div id="resize-handle"></div>
 </div>
 
 <script>
@@ -252,28 +256,28 @@ const KEY_MAP = {
   ' ': 'pressSpace'
 };
 
-const images = {}; // name → object URL
+const MOUSE_RANGE = 30;
+const RADIUS = 400;
+
+const images = {};
 let baseImg = null;
-let mouseImg = null;        // rightHandMouse URL
+let mouseImg = null;
 let activeKey = null;
-let releaseTimer = null;
 
-const display = document.getElementById('png-display');
+const display      = document.getElementById('png-display');
 const mouseDisplay = document.getElementById('mouse-display');
-const panel = document.getElementById('control-panel');
-const status = document.getElementById('status');
-const keyGrid = document.getElementById('key-grid');
-const overlay = document.getElementById('overlay');
-
-// ── Mouse tracking ──
-const MOUSE_RANGE = 30; // ±px the hand can travel in any direction
+const panel        = document.getElementById('control-panel');
+const status       = document.getElementById('status');
+const keyGrid      = document.getElementById('key-grid');
+const overlay      = document.getElementById('overlay');
+const mouseRow     = document.getElementById('mouse-row');
+const mouseBadge   = document.getElementById('mouse-badge');
 
 // ── Build key grid ──
 const chips = {};
 KEYS.forEach(k => {
   const el = document.createElement('div');
   el.className = 'key-chip';
-  el.id = 'chip-' + k;
   el.textContent = KEY_LABELS[k] || k.toUpperCase();
   el.title = KEY_MAP[k] + '.png';
   keyGrid.appendChild(el);
@@ -285,10 +289,15 @@ document.getElementById('file-input').addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
   let loaded = 0;
 
-  // Revoke old URLs
-  Object.values(images).forEach(URL.revokeObjectURL);
+  Object.values(images).forEach(u => URL.revokeObjectURL(u));
   Object.keys(images).forEach(k => delete images[k]);
+  if (mouseImg) URL.revokeObjectURL(mouseImg);
   baseImg = null;
+  mouseImg = null;
+  mouseDisplay.style.display = 'none';
+  mouseRow.classList.remove('loaded');
+  mouseBadge.textContent = 'not loaded';
+  KEYS.forEach(k => chips[k].classList.remove('loaded'));
 
   files.forEach(file => {
     const nameNoExt = file.name.replace(/\.[^.]+$/, '').toLowerCase();
@@ -304,6 +313,8 @@ document.getElementById('file-input').addEventListener('change', (e) => {
       mouseImg = url;
       mouseDisplay.src = url;
       mouseDisplay.style.display = 'block';
+      mouseRow.classList.add('loaded');
+      mouseBadge.textContent = '✓ loaded';
       loaded++;
     }
 
@@ -320,8 +331,8 @@ document.getElementById('file-input').addEventListener('change', (e) => {
     display.src = baseImg;
     status.textContent = `✓ Loaded ${loaded} images`;
     status.className = 'ok';
-    const btn = document.getElementById('folder-btn');
-    btn.textContent = '✓ ' + files[0].webkitRelativePath.split('/')[0] || 'folder loaded';
+    document.getElementById('folder-btn').textContent =
+      '✓ ' + (files[0].webkitRelativePath.split('/')[0] || 'folder loaded');
   } else {
     status.textContent = '⚠ No base.png found in selection';
     status.className = 'warn';
@@ -331,13 +342,8 @@ document.getElementById('file-input').addEventListener('change', (e) => {
 // ── Key handling ──
 function setKey(k) {
   if (!baseImg) return;
-  if (releaseTimer) clearTimeout(releaseTimer);
-
-  // Clear previous active chip
   if (activeKey !== null) chips[activeKey]?.classList.remove('active');
-
   activeKey = k;
-
   if (k !== null && images[k]) {
     display.src = images[k];
     chips[k].classList.add('active');
@@ -350,21 +356,16 @@ const heldKeys = new Set();
 
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
-
-  // Toggle panel
   if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
-    // Only toggle if not typing in an input
     if (document.activeElement.tagName !== 'INPUT') {
       panel.classList.toggle('hidden');
       return;
     }
   }
-
   const k = e.key === ' ' ? ' ' : e.key.toLowerCase();
   if (KEYS.includes(k)) {
     e.preventDefault();
     heldKeys.add(k);
-    // Use most recently pressed key
     setKey(k);
   }
 });
@@ -372,74 +373,39 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => {
   const k = e.key === ' ' ? ' ' : e.key.toLowerCase();
   heldKeys.delete(k);
-
   if (heldKeys.size > 0) {
-    // Fall back to another held key
-    const last = [...heldKeys].at(-1);
-    setKey(last);
+    setKey([...heldKeys].at(-1));
   } else {
     setKey(null);
   }
 });
 
-// ── Drag ──
-let dragging = false, dragOffX = 0, dragOffY = 0;
+// ── Mouse tracking ──
+// We compute the overlay center once and cache it.
+// It never changes since there's no dragging/resizing anymore.
+let overlayCenter = null;
 
-overlay.addEventListener('mousedown', (e) => {
-  if (e.target === document.getElementById('resize-handle')) return;
-  dragging = true;
-  overlay.classList.add('dragging');
-  const rect = overlay.getBoundingClientRect();
-  dragOffX = e.clientX - rect.left;
-  dragOffY = e.clientY - rect.top;
-  overlay.style.transform = 'none';
-  overlay.style.left = rect.left + 'px';
-  overlay.style.top = rect.top + 'px';
-  e.preventDefault();
-});
+function getOverlayCenter() {
+  if (!overlayCenter) {
+    const rect = overlay.getBoundingClientRect();
+    overlayCenter = {
+      x: rect.left + rect.width  / 2,
+      y: rect.top  + rect.height / 2,
+    };
+  }
+  return overlayCenter;
+}
+
+// Recompute if window resizes
+window.addEventListener('resize', () => { overlayCenter = null; });
 
 document.addEventListener('mousemove', (e) => {
-  if (dragging) {
-    overlay.style.left = (e.clientX - dragOffX) + 'px';
-    overlay.style.top  = (e.clientY - dragOffY) + 'px';
-  }
-  if (resizing) {
-    const newW = Math.max(60, e.clientX - resizeStartX + resizeStartW);
-    const newH = Math.max(60, e.clientY - resizeStartY + resizeStartH);
-    overlay.style.width  = newW + 'px';
-    overlay.style.height = newH + 'px';
-  }
-  // Mouse hand tracking (runs even while dragging/resizing for simplicity)
-  if (mouseImg) {
-    const rect = overlay.getBoundingClientRect();
-    const centerX = rect.left + rect.width  / 2;
-    const centerY = rect.top  + rect.height / 2;
-    const rawDX = e.clientX - centerX;
-    const rawDY = e.clientY - centerY;
-    const maxInput = Math.max(window.innerWidth, window.innerHeight) / 2;
-    const normX = Math.max(-1, Math.min(1, rawDX / maxInput));
-    const normY = Math.max(-1, Math.min(1, rawDY / maxInput));
-    mouseDisplay.style.transform = `translate(${-normX * MOUSE_RANGE}px, ${-normY * MOUSE_RANGE}px)`;
-  }
-});
-
-document.addEventListener('mouseup', () => {
-  dragging = false;
-  resizing = false;
-  overlay.classList.remove('dragging');
-});
-
-// ── Resize ──
-let resizing = false, resizeStartX, resizeStartY, resizeStartW, resizeStartH;
-
-document.getElementById('resize-handle').addEventListener('mousedown', (e) => {
-  resizing = true;
-  resizeStartX = e.clientX;
-  resizeStartY = e.clientY;
-  resizeStartW = overlay.offsetWidth;
-  resizeStartH = overlay.offsetHeight;
-  e.preventDefault();
-  e.stopPropagation();
+  if (!mouseImg) return;
+  const c = getOverlayCenter();
+  const normX = Math.max(-1, Math.min(1, (e.clientX - c.x) / RADIUS));
+  const normY = Math.max(-1, Math.min(1, (e.clientY - c.y) / RADIUS));
+  mouseDisplay.style.transform =
+    `translate(${-normX * MOUSE_RANGE}px, ${-normY * MOUSE_RANGE}px)`;
 });
 </script>
 </body>
