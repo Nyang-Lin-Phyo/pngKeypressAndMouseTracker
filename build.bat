@@ -1,21 +1,23 @@
 @echo off
 
-echo Cleaning old builds...
-
 if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist "*.spec" del /q *.spec
 
-echo.
-echo Building PNGvtuber Launcher...
-
 python -m PyInstaller ^
-  --onefile ^
-  --windowed ^
-  --collect-all websockets ^
-  --name "PNGvtuber Launcher" ^
-  launcher.py
+--onefile ^
+--windowed ^
+--collect-all websockets ^
+--icon=assets\icon.ico ^
+--name "LivelyPNG" ^
+launcher.py
 
-echo.
-echo Done!
+if %ERRORLEVEL% neq 0 (
+echo Build failed.
+pause
+exit /b 1
+)
+
+echo Build complete:
+echo dist\PNGvtuber Launcher.exe
 pause
