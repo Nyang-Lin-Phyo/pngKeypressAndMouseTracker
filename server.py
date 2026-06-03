@@ -22,6 +22,19 @@ PORT = 8765
 
 TRACKED_KEYS = {'1','2','3','4','q','w','e','r','a','s','d','f','space'}
 
+# Read launcher config if present
+import json as _json, pathlib as _pathlib
+_cfg_path = _pathlib.Path(__file__).parent / "launcher_config.json"
+try:
+    with open(_cfg_path) as _f:
+        _cfg = _json.load(_f)
+    print(f"[*] Loaded config from launcher_config.json")
+    print(f"    PNG folder : {_cfg.get('png_folder', '(not set)')}")
+    print(f"    Center X/Y : {_cfg.get('center_x', '?')} / {_cfg.get('center_y', '?')}")
+except FileNotFoundError:
+    _cfg = {}
+    print("[*] No launcher_config.json found — using defaults")
+
 # ── Shared state ──────────────────────────────────────────────────────────────
 _press_order: list = []
 _mouse_x: int = 0

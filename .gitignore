@@ -1,0 +1,29 @@
+# Launcher config (contains local paths and screen coords)
+launcher_config.json
+
+# PyInstaller output
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+
+# PNGs folder (your art assets — don't commit these)
+PNGs/
+
+# OS clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/

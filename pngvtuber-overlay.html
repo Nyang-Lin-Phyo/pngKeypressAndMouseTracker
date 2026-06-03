@@ -68,7 +68,7 @@
 </head>
 <body>
 
-<!-- <div id="ws-dot" title="WebSocket: disconnected"></div> -->
+<div id="ws-dot" title="WebSocket: disconnected"></div>
 
 <div id="overlay">
   <div id="png-stack">
@@ -79,17 +79,26 @@
 
 <script>
 // ── Config ────────────────────────────────────────────────────────────────
-const WS_URL    = 'ws://localhost:8765';
-const PNG_DIR   = './PNGs/';
-const MOUSE_RANGE = 20;    // ±px the hand overlay can travel
-const RADIUS_X    = 1100;  // increase if hand hits left/right wall too early
-const RADIUS_Y    = 800;   // increase if hand hits top/bottom wall too early
+const WS_URL      = 'ws://localhost:8765';
+const PNG_DIR     = './PNGs/';
+const MOUSE_RANGE = 20;   // ±px the hand overlay can travel
 
-// ── Set these to where your mousepad center is on your PHYSICAL screen ────
-// How to find them: move your mouse to where the hand should be centered,
-// then check the coords printed by server.py — paste those values here.
-const MOUSE_CENTER_X = 960;   // absolute screen X of mousepad center
-const MOUSE_CENTER_Y = 540;   // absolute screen Y of mousepad center
+// Defaults — overwritten by launcher_config.json if present
+let RADIUS_X       = 1100;
+let RADIUS_Y       = 800;
+let MOUSE_CENTER_X = 960;
+let MOUSE_CENTER_Y = 540;
+
+// Load config written by the launcher (no-op if file missing)
+fetch('./launcher_config.json')
+  .then(r => r.json())
+  .then(cfg => {
+    if (cfg.radius_x !== undefined)  RADIUS_X       = cfg.radius_x;
+    if (cfg.radius_y !== undefined)  RADIUS_Y       = cfg.radius_y;
+    if (cfg.center_x !== undefined)  MOUSE_CENTER_X = cfg.center_x;
+    if (cfg.center_y !== undefined)  MOUSE_CENTER_Y = cfg.center_y;
+  })
+  .catch(() => {});
 
 const KEY_MAP = {
   '1': 'press1', '2': 'press2', '3': 'press3', '4': 'press4',
@@ -101,7 +110,6 @@ const KEY_MAP = {
 // ── Elements ──────────────────────────────────────────────────────────────
 const display      = document.getElementById('png-display');
 const mouseDisplay = document.getElementById('mouse-display');
-// const wsDot        = document.getElementById('ws-dot');
 const overlay      = document.getElementById('overlay');
 
 // ── Preload images ────────────────────────────────────────────────────────
@@ -168,8 +176,6 @@ function connect() {
   ws = new WebSocket(WS_URL);
 
   ws.addEventListener('open', () => {
-    wsDot.classList.add('connected');
-    wsDot.title = 'WebSocket: connected';
   });
 
   ws.addEventListener('message', (e) => {
@@ -179,9 +185,6 @@ function connect() {
   });
 
   ws.addEventListener('close', () => {
-    wsDot.classList.remove('connected');
-    wsDot.title = 'WebSocket: disconnected — retrying…';
-    // Auto-reconnect after 2s
     setTimeout(connect, 2000);
   });
 
